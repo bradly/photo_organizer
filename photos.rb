@@ -49,6 +49,7 @@ class PhotoOrganizer
       end
     rescue => ex
       puts "Error: #{ex.class.to_s} #{path}"
+      move_to_unsorted(path)
       return
     end
 
@@ -65,20 +66,24 @@ class PhotoOrganizer
     FileUtils.mkdir_p destination_base_path
     destination_path = File.join(destination_base_path, filename(path, create_date))
 
+    copy_file(path, destination_path)
+  end
+
+  def copy_file(path, destination_path)
     if File.exists?(destination_path)
       puts "#{destination_path} already exists"
       return
     end
-
     puts "#{path} -> #{destination_path}"
-
-    #puts "FileUtils.cp #{path}, #{destination_path}"
-    FileUtils.cp path, destination_path
+    # FileUtils.cp path, destination_path
   end
 
   def move_to_unsorted(path)
+    destination_path = File.join(unsorted_dir_path, filename(path))
+    copy_file(path, destination_path)
+  end
 
-  def filename(path, time)
+  def filename(path, time = nil)
     size = File.size(path)
     parts = path.split('/')[-1].split('.')
 
@@ -86,9 +91,9 @@ class PhotoOrganizer
     new_parts << size
     new_parts << parts[-1]
 
-    base_name = new_parts.join('.')
-
-    "#{time.strftime('%F_%H-%M-%S-%L')}_#{base_name}"
+    name = new_parts.join('.')
+    name.prepend("#{time.strftime('%F_%H-%M-%S-%L')}_") if time
+    name
   end
 
   def importable?(path)
