@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
-import_dir_path = '~/Desktop/PrintResolution'
+import_dir_path = '/Volumes/Untitled/processed/Pictures8'
+puts "import dir path: #{import_dir_path}"
 
 class PhotoOrganizer
   require 'fileutils'
@@ -24,7 +25,7 @@ class PhotoOrganizer
     #Dir.foreach(@import_dir_path) do |path|
     @skip = true
     Dir.glob(File.join(@import_dir_path, '**', '*')) do |path|
-      #@skip = false if path.match('Picks/sc007d21f4')
+      #@skip = false if path.match('DSC_2802_edited-1.jpg')
       #next if @skip
       organize_path(path)
     end
@@ -75,7 +76,7 @@ class PhotoOrganizer
       return
     end
     puts "#{path} -> #{destination_path}"
-    # FileUtils.cp path, destination_path
+    FileUtils.cp path, destination_path
   end
 
   def move_to_unsorted(path)
@@ -97,9 +98,7 @@ class PhotoOrganizer
   end
 
   def importable?(path)
-    path != '.' &&
-      path != '..' &&
-      self.class::VALID_EXTENSIONS.include?(path_extension(path))
+    self.class::VALID_EXTENSIONS.include?(path_extension(path))
   end
 
   def path_extension(path)
@@ -120,7 +119,6 @@ end
 #import_dir_path = ARGV[1] || '~/Pictures'
 #import_dir_path = ARGV[1] || '~/dreamhost/backups/Modified'
 #import_dir_path = '/Volumes/Untitled/Pictures'
-puts "import dir path: #{import_dir_path}"
 
 photo_organizer = PhotoOrganizer.new(import_dir_path)
 photo_organizer.organize
