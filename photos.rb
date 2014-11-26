@@ -1,73 +1,79 @@
 #!/usr/bin/env ruby
-import_dir_path = '/Volumes/Untitled/processed/Pictures8'
-puts "import dir path: #{import_dir_path}"
+
+require 'fileutils'
+require 'mini_exiftool'
+
+IMPORT_DIR_PATH = '~/Photos' # Change this to the directory of photos you want to import.
+SORTED_DIR_PATH = '/Volumes/Backup/organized_photos' # Change this to the location of where you want your organized files
 
 class PhotoOrganizer
-  require 'fileutils'
-  require 'mini_exiftool'
+  VALID_EXTENSIONS = %w(.jpg .jpeg .raw .mov)
 
-  VALID_EXTENSIONS = %w(jpg jpeg raw mov avi)
+  def initialize(import_dir_path, sorted_dir_path)
+    @sorted_dir_path   = File.expand_path(sorted_dir_path)
+    @import_dir_path   = File.expand_path(import_dir_path)
+    @unsorted_dir_path = File.join(@sorted_dir_path, 'unsorted')
+    assert_import_dir_path_exists!
+    create_sort_dirs
+  end
 
-  def initialize(import_dir_path)
-    @import_dir_path = File.expand_path(import_dir_path)
+  def organize
+    paths_for_import.each do |path|
+      organize_path(path)
+    end
+  end
 
+  private
+
+  def assert_import_dir_path_exists!
     unless File.exists?(@import_dir_path)
       puts "#{@import_dir_path} not found"
       exit 1
     end
-
-    @sorted_dir_path = File.expand_path('/Volumes/Untitled/sorted_photos')
   end
 
-  def organize
-    maybe_create_sort_dir
+  def create_sort_dirs
+    FileUtils.mkdir_p @sorted_dir_path
+    FileUtils.mkdir_p @unsorted_dir_path
+  end
 
-    #Dir.foreach(@import_dir_path) do |path|
-    @skip = true
-    Dir.glob(File.join(@import_dir_path, '**', '*')) do |path|
-      #@skip = false if path.match('DSC_2802_edited-1.jpg')
-      #next if @skip
-      organize_path(path)
-    end
+  def paths_for_import
+    Dir.glob(File.join(@import_dir_path, '**', '*'))
   end
 
   def organize_path(path)
     return unless importable?(path)
 
-    begin
-      exif = MiniExiftool.new path
-      create_date = exif.create_date
-      if create_date.nil?
-        puts "No create date for #{path}"
-        move_to_unsorted(path)
-        return 
-      end
-
-      if create_date == false
-        puts "Create date false #{path}"
-        move_to_unsorted(path)
-        return 
-      end
-    rescue => ex
-      puts "Error: #{ex.class.to_s} #{path}"
+    if create_date = exif_create_date(path)
+      copy_file(path, destination_path(path, create_date))
+    else
       move_to_unsorted(path)
-      return
+    end
+  end
+
+  def importable?(path)
+    self.class::VALID_EXTENSIONS.include?(File.basename(path, '.*'))
+  end
+
+  def exif_create_date(path)
+    timestamp = MiniExiftool.new(path).create_date
+
+    if timestamp.nil? || timestamp == false || !timestamp.is_a?(Time)
+      puts "Missing or invalid create_date for #{path} - #{timestamp}"
+      return false
     end
 
-    begin
-      year = create_date.year.to_s
-      month = create_date.strftime('%m')
-    rescue => ex
-      puts "Error: Couldn't parse time for #{create_date} - #{ex.class.to_s} #{path}"
-      move_to_unsorted(path)
-      return
-    end
+    timestamp
+  rescue => ex
+    puts "#{ex.class} Error: Couldn't parse time for #{path}"
+    return false
+  end
 
+  def destination_path(path, create_date)
+    year, month = create_date.strftime('%Y'), create_date.strftime('%m')
     destination_base_path = File.join(@sorted_dir_path, year, month)
-    FileUtils.mkdir_p destination_base_path
-    destination_path = File.join(destination_base_path, filename(path, create_date))
-
-    copy_file(path, destination_path)
+    FileUtils.mkdir_p(destination_base_path)
+    File.join(destination_base_path, filename(path, create_date))
   end
 
   def copy_file(path, destination_path)
@@ -75,6 +81,7 @@ class PhotoOrganizer
       puts "#{destination_path} already exists"
       return
     end
+
     puts "#{path} -> #{destination_path}"
     FileUtils.cp path, destination_path
   end
@@ -84,41 +91,14 @@ class PhotoOrganizer
     copy_file(path, destination_path)
   end
 
+  # filename format it {DATETIME}_{ORIGNIAL_FILENAME}.{FILE_SIZE_IN_BYTES}.{EXTENTION}
+  # so img001.jpg would become 1981-07-22_05-44-23-000_img001.736289.jpg
   def filename(path, time = nil)
-    size = File.size(path)
-    parts = path.split('/')[-1].split('.')
-
-    new_parts  = parts[0..-2]
-    new_parts << size
-    new_parts << parts[-1]
-
-    name = new_parts.join('.')
+    name  = File.basename(path, '.*')
+    name << ".#{File.size}#{File.extname(path)}"
     name.prepend("#{time.strftime('%F_%H-%M-%S-%L')}_") if time
     name
   end
-
-  def importable?(path)
-    self.class::VALID_EXTENSIONS.include?(path_extension(path))
-  end
-
-  def path_extension(path)
-    path.split('.').last.downcase
-  end
-
-  def maybe_create_sort_dir
-    FileUtils.mkdir_p @sorted_dir_path
-    FileUtils.mkdir_p unsorted_dir_path
-  end
-
-  def unsorted_dir_path
-    @unsorted_dir_path ||= File.join(@sorted_dir_path, 'unsorted')
-  end
-
 end
 
-#import_dir_path = ARGV[1] || '~/Pictures'
-#import_dir_path = ARGV[1] || '~/dreamhost/backups/Modified'
-#import_dir_path = '/Volumes/Untitled/Pictures'
-
-photo_organizer = PhotoOrganizer.new(import_dir_path)
-photo_organizer.organize
+PhotoOrganizer.new(IMPORT_DIR_PATH, SORTED_DIR_PATH).organize
