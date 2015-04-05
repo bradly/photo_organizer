@@ -3,8 +3,8 @@
 require 'fileutils'
 require 'mini_exiftool'
 
-IMPORT_DIR_PATH = '~/Photos' # Change this to the directory of photos you want to import.
-SORTED_DIR_PATH = '/Volumes/Backup/organized_photos' # Change this to the location of where you want your organized files
+IMPORT_DIR_PATH = '~/Pictures' # Change this to the directory of photos you want to import.
+SORTED_DIR_PATH = '/Volumes/Untitled 1/sorted_photos' # Change this to the location of where you want your organized files
 
 class PhotoOrganizer
   VALID_EXTENSIONS = %w(.jpg .jpeg .raw .mov)
@@ -33,8 +33,19 @@ class PhotoOrganizer
   end
 
   def create_sort_dirs
-    FileUtils.mkdir_p @sorted_dir_path
-    FileUtils.mkdir_p @unsorted_dir_path
+    begin
+      FileUtils.mkdir_p @sorted_dir_path
+    rescue Errno::EACCES
+      puts "There was an error accessing #@sorted_dir_path. Please make sure you have permissions to the directory."
+      exit 1
+    end
+
+    begin
+      FileUtils.mkdir_p @unsorted_dir_path
+    rescue Errno::EACCES
+      puts "There was an error accessing #@unsorted_dir_path. Please make sure you have permissions to the directory."
+      exit 1
+    end
   end
 
   def paths_for_import
@@ -44,7 +55,9 @@ class PhotoOrganizer
   def organize_path(path)
     return unless importable?(path)
 
-    if create_date = exif_create_date(path)
+    create_date = exif_create_date(path)
+
+    if create_date
       copy_file(path, destination_path(path, create_date))
     else
       move_to_unsorted(path)
@@ -52,7 +65,8 @@ class PhotoOrganizer
   end
 
   def importable?(path)
-    self.class::VALID_EXTENSIONS.include?(File.basename(path, '.*'))
+    extension = File.extname(path)
+    VALID_EXTENSIONS.include?(extension.downcase)
   end
 
   def exif_create_date(path)
@@ -71,7 +85,9 @@ class PhotoOrganizer
 
   def destination_path(path, create_date)
     year, month = create_date.strftime('%Y'), create_date.strftime('%m')
+
     destination_base_path = File.join(@sorted_dir_path, year, month)
+
     FileUtils.mkdir_p(destination_base_path)
     File.join(destination_base_path, filename(path, create_date))
   end
@@ -95,8 +111,11 @@ class PhotoOrganizer
   # so img001.jpg would become 1981-07-22_05-44-23-000_img001.736289.jpg
   def filename(path, time = nil)
     name  = File.basename(path, '.*')
-    name << ".#{File.size}#{File.extname(path)}"
+    #img001
+    name << ".#{File.size(path)}#{File.extname(path)}"
+    #img001.9378249837.jpg
     name.prepend("#{time.strftime('%F_%H-%M-%S-%L')}_") if time
+    #2008-03-11_08-55-23-000_img001.9378249837.jpg
     name
   end
 end
